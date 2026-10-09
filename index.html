@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0c0d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%230a0c0d'/%3E%3Crect x='15' y='38' width='6' height='12' fill='%237f8d99'/%3E%3Crect x='29' y='27' width='6' height='23' fill='%23e8a33d'/%3E%3Crect x='43' y='16' width='6' height='34' fill='%23e8a33d'/%3E%3C/svg%3E">
+<title>Weapons gotcha in ABI｜Arena Breakout: Infinite 武器ランダム選出</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ARMORY ROLL — tokens
+   ============================================================ */
+:root{
+  --ink:#0a0c0d;
+  --panel:#12161a;
+  --panel2:#171e23;
+  --panel3:#202932;
+  --line:#2b353d;
+  --line2:#3c4954;
+  --steel:#7f8d99;
+  --mut:#9aa7b2;
+  --bone:#e9e6dd;
+  --amber:#e8a33d;
+  --amber-d:#a86f18;
+  --olive:#7b8a4e;
+  --disp:"Saira Condensed","IBM Plex Sans JP",system-ui,sans-serif;
+  --body:"IBM Plex Sans JP","Hiragino Sans","Yu Gothic",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;min-height:100vh;color:var(--bone);
+  font-family:var(--body);font-size:15px;line-height:1.6;
+  background:
+    radial-gradient(1100px 520px at 50% -8%, #1e272d 0%, transparent 62%),
+    radial-gradient(760px 420px at 105% 105%, #16201c 0%, transparent 58%),
+    var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(140,160,175,.05) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(140,160,175,.05) 1px,transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(920px 620px at 50% 18%, #000 0%, transparent 86%);
+  mask-image:radial-gradient(920px 620px at 50% 18%, #000 0%, transparent 86%);
+}
+.shell{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:22px 20px 64px}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;
+     padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.brand{display:flex;align-items:center;gap:14px}
+.mark{display:flex;align-items:flex-end;gap:3px;padding:9px 10px;
+      border:1px solid var(--line2);background:linear-gradient(160deg,var(--panel3),var(--panel))}
+.mark i{display:block;width:3px;background:var(--amber)}
+.mark i:nth-child(1){height:8px;background:var(--steel)}
+.mark i:nth-child(2){height:13px}
+.mark i:nth-child(3){height:19px}
+.eyebrow{margin:0 0 3px;font-family:var(--mono);font-size:10px;letter-spacing:.24em;
+         text-transform:uppercase;color:var(--amber)}
+h1{margin:0;font-size:clamp(1.35rem,3.2vw,1.9rem);font-weight:600;letter-spacing:.07em;line-height:1.1}
+h1 span{display:block;margin-top:5px;font-family:var(--mono);font-size:11px;font-weight:400;
+        letter-spacing:.12em;color:var(--steel)}
+.readout{font-family:var(--mono);font-size:11px;letter-spacing:.13em;color:var(--steel);
+         text-align:right;text-transform:uppercase;line-height:1.9}
+.readout b{color:var(--bone);font-weight:600}
+
+/* ---------- layout ---------- */
+.stage{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(232px,.85fr);gap:18px;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:1fr}}
+.panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);position:relative}
+.head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:9px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.016)}
+.head .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--steel)}
+.head .cnt{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--amber)}
+
+/* ---------- requisition window ---------- */
+.brackets{position:absolute;inset:0;pointer-events:none}
+.brackets::before,.brackets::after{content:"";position:absolute;width:15px;height:15px;
+  border:1px solid rgba(232,163,61,.6)}
+.brackets::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.brackets::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+
+.reel{position:relative;overflow:hidden;min-height:250px;padding:34px 22px 28px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;text-align:center}
+.reel.shake{animation:shake .3s ease-out}
+@keyframes shake{0%,100%{transform:translate(0)}20%{transform:translate(-2px,1px)}
+  40%{transform:translate(2px,-1px)}60%{transform:translate(-1px,-1px)}80%{transform:translate(1px,1px)}}
+
+.tag{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+     color:var(--amber);border:1px solid rgba(232,163,61,.45);padding:3px 9px;background:rgba(232,163,61,.07)}
+.tag[data-empty="1"]{color:var(--steel);border-color:var(--line2);background:rgba(255,255,255,.02)}
+
+.wname{margin:0;font-family:var(--disp);font-weight:800;text-transform:uppercase;line-height:.92;
+       letter-spacing:.015em;font-size:clamp(2.5rem,8.4vw,4.9rem);color:var(--bone);
+       text-shadow:0 0 30px rgba(232,163,61,.14);word-break:break-word;transition:color .18s}
+.wname.spin{color:var(--steel);filter:blur(.5px)}
+
+.wmeta{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 14px;font-family:var(--mono);
+       font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--mut)}
+.wmeta .sep{color:var(--line2)}
+.wmeta .note{color:var(--amber)}
+
+.scan{position:absolute;left:0;right:0;height:76px;pointer-events:none;opacity:0;
+      background:linear-gradient(180deg,transparent,rgba(232,163,61,.12),transparent);
+      animation:scan 1.05s linear infinite;transition:opacity .2s}
+.reel.rolling .scan{opacity:1}
+@keyframes scan{from{top:-84px}to{top:100%}}
+
+.stamp{position:absolute;top:13px;right:15px;font-family:var(--mono);font-weight:600;font-size:10px;
+       letter-spacing:.22em;text-transform:uppercase;color:var(--amber);border:2px solid var(--amber);
+       padding:4px 8px;background:rgba(232,163,61,.07);opacity:0;transform:rotate(-9deg)}
+.stamp.on{animation:stampIn .36s cubic-bezier(.2,1.5,.4,1) forwards}
+@keyframes stampIn{0%{opacity:0;transform:rotate(-9deg) scale(1.9)}
+  60%{opacity:1}100%{opacity:1;transform:rotate(-9deg) scale(1)}}
+
+.roll{width:100%;margin-top:14px;border:1px solid var(--amber-d);cursor:pointer;
+      background:linear-gradient(180deg,#f2b958,var(--amber));color:#1a1206;
+      font-family:var(--disp);font-weight:800;font-size:1.45rem;letter-spacing:.3em;text-indent:.3em;
+      text-transform:uppercase;padding:17px 18px 15px;
+      display:flex;align-items:center;justify-content:center;gap:14px;transition:filter .15s,transform .06s}
+.roll:hover:not([disabled]){filter:brightness(1.09)}
+.roll:active:not([disabled]){transform:translateY(1px)}
+.roll[disabled]{cursor:progress;filter:grayscale(.4) brightness(.82)}
+.roll small{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.14em;text-indent:0;opacity:.68}
+.hint{margin:10px 2px 0;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--steel)}
+
+/* ---------- sidearm (bolt-action のときだけ自動選出) ---------- */
+.sidearm{border-color:rgba(123,138,78,.6)}
+.sidearm .head{background:rgba(123,138,78,.09)}
+.sa-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;padding:14px}
+@media (max-width:640px){.sa-body{grid-template-columns:1fr;gap:12px}}
+.sa-kicker{margin:0 0 5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;
+          text-transform:uppercase;color:var(--olive)}
+.sa-name{margin:0;font-family:var(--disp);font-weight:800;line-height:.95;letter-spacing:.02em;
+         text-transform:uppercase;font-size:clamp(1.7rem,5.2vw,2.35rem);color:var(--bone)}
+.sa-meta{margin:8px 0 0;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+         text-transform:uppercase;color:var(--mut)}
+.sa-pills{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-content:start}
+@media (max-width:420px){.sa-pills{grid-template-columns:1fr}}
+.sa-pill{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:7px 10px;
+         border:1px solid rgba(255,255,255,.075);background:rgba(255,255,255,.02)}
+.sa-pill span{font-size:11.5px;color:var(--mut)}
+.sa-pill b{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--bone)}
+.sa-pill b u{text-decoration:none;font-size:9.5px;color:var(--steel);margin-left:3px}
+.sidearm.reveal{animation:saIn .34s cubic-bezier(.2,1.1,.35,1) both}
+@keyframes saIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.hitem .side{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;color:var(--olive)}
+
+/* ---------- stats ---------- */
+.stats{padding:8px 14px 14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 30px}
+.srow{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:0 10px;
+      padding:8px 0;border-bottom:1px solid rgba(255,255,255,.055)}
+.srow .n{font-size:12.5px;color:var(--mut)}
+.srow .n em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.13em;
+            color:var(--steel);margin-left:7px;text-transform:uppercase}
+.srow .v{font-family:var(--mono);font-size:12.5px;color:var(--bone);font-weight:500}
+.srow .v u{font-style:normal;text-decoration:none;font-size:9.5px;color:var(--steel);margin-left:4px}
+.srow .bar{grid-column:1/-1;height:3px;margin-top:6px;background:rgba(255,255,255,.07);
+           position:relative;overflow:hidden}
+.srow .bar i{position:absolute;left:0;top:0;bottom:0;width:0;
+             background:linear-gradient(90deg,var(--olive),var(--amber));
+             transition:width .5s cubic-bezier(.2,.9,.2,1)}
+.empty-note{grid-column:1/-1;padding:16px 0;font-size:13px;color:var(--steel)}
+@media (max-width:640px){.stats{grid-template-columns:1fr}}
+
+/* ---------- side panels ---------- */
+.side{display:grid;gap:18px}
+.body{padding:12px;display:grid;gap:7px}
+.chip{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+      padding:9px 11px;border:1px solid var(--line);background:rgba(255,255,255,.012);
+      color:var(--mut);font-family:var(--body);font-size:13.5px;transition:.14s}
+.chip:hover{border-color:var(--line2);color:var(--bone)}
+.chip .code{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--steel);
+            border:1px solid var(--line2);padding:2px 5px;min-width:40px;text-align:center}
+.chip .ct{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--steel)}
+.chip[aria-pressed="true"]{border-color:rgba(232,163,61,.7);color:var(--bone);background:rgba(232,163,61,.09)}
+.chip[aria-pressed="true"] .code{border-color:var(--amber);color:var(--amber)}
+.chip .flag{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--amber)}
+.chip .ctxt{display:flex;flex-direction:column;gap:2px;min-width:0;line-height:1.25}
+.chip .cname{font-size:13.5px}
+.chip .csub{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--steel)}
+.chip[aria-pressed="true"] .csub{color:var(--amber)}
+.mini{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--steel);
+      background:none;border:1px solid var(--line);cursor:pointer;padding:4px 8px;text-transform:uppercase}
+.mini:hover{border-color:var(--line2);color:var(--bone)}
+.rule-note{padding:0 12px 12px;font-size:11.5px;color:var(--steel);line-height:1.6}
+
+.hist{padding:12px;display:grid;gap:6px;max-height:330px;overflow:auto}
+.hitem{display:flex;align-items:center;gap:10px;padding:7px 9px;border:1px solid rgba(255,255,255,.05);
+       background:rgba(255,255,255,.015);font-family:var(--mono);font-size:10px;color:var(--steel)}
+.hitem .idx{color:var(--amber);letter-spacing:.08em}
+.hitem b{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:.03em;color:var(--bone)}
+.hitem .c{margin-left:auto;letter-spacing:.1em}
+
+/* ---------- footer ---------- */
+.foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);
+      font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--steel);line-height:1.9}
+.foot a{color:var(--steel)}
+
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div>
+        <p class="eyebrow">Requisition Terminal // ABI</p>
+        <h1>Weapons gotcha in ABI<span>Arena Breakout: Infinite — 武器ランダム選出</span></h1>
+      </div>
+    </div>
+    <div class="readout">
+      プール <b id="poolCount">--</b> 丁 ／ 履歴 <b id="histCount">0</b><br>
+      データ <b>2026.10</b> ／ 出典 Fandom Wiki
+    </div>
+  </header>
+
+  <div class="stage">
+    <!-- ============ 左：抽選ウィンドウ ============ -->
+    <section aria-label="抽選結果">
+      <div class="panel">
+        <div class="head">
+          <span class="lbl">Requisition Window</span>
+          <span class="cnt" id="winCount">対象 --</span>
+        </div>
+        <div class="reel" id="reel">
+          <span class="scan" aria-hidden="true"></span>
+          <span class="stamp" id="stamp" aria-hidden="true">確定 / Issued</span>
+          <span class="tag" id="resTag" data-empty="1">Standby</span>
+          <h2 class="wname" id="resName" aria-live="polite">READY</h2>
+          <p class="wmeta" id="resMeta">
+            <span>「抽選」を押してください</span>
+          </p>
+          <span class="brackets" aria-hidden="true"></span>
+        </div>
+      </div>
+
+      <button class="roll" id="rollBtn" type="button">抽 選 <small>SPACE</small></button>
+      <p class="hint">SPACE / ENTER でも抽選できます。カテゴリを1つ以上選んでから実行してください。<br>
+        ボルトアクションが出たときだけ、サイドアーム（ピストル）を1丁同時に自動選出します。</p>
+
+      <div class="panel sidearm" id="sidearmPanel" hidden>
+        <div class="head">
+          <span class="lbl">Sidearm // Auto-issued</span>
+          <span class="cnt">ボルトアクション時のみ</span>
+        </div>
+        <div class="sa-body">
+          <div>
+            <p class="sa-kicker">Pistol ／ 護身用サイドアーム</p>
+            <h3 class="sa-name" id="saName">—</h3>
+            <p class="sa-meta" id="saMeta">—</p>
+          </div>
+          <div class="sa-pills" id="saPills"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:18px">
+        <div class="head">
+          <span class="lbl">Weapon Performance</span>
+          <span class="cnt" id="statName">—</span>
+        </div>
+        <div class="stats" id="stats">
+          <p class="empty-note">まだ抽選していません。武器の性能はここに表示されます。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 右：サイド ============ -->
+    <aside class="side">
+      <div class="panel">
+        <div class="head">
+          <span class="lbl">抽選カテゴリ</span>
+          <span style="display:flex;gap:6px">
+            <button class="mini" id="allBtn" type="button">全選択</button>
+            <button class="mini" id="noneBtn" type="button">全解除</button>
+          </span>
+        </div>
+        <div class="body" id="cats"></div>
+        <p class="rule-note" id="catNote">初期設定ではピストル（サイドアーム）を外しています。</p>
+      </div>
+
+      <div class="panel">
+        <div class="head">
+          <span class="lbl">抽選履歴</span>
+          <button class="mini" id="clearHist" type="button">クリア</button>
+        </div>
+        <div class="hist" id="hist">
+          <p style="margin:0;font-size:12px;color:var(--steel)">まだ履歴はありません。</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    統計データの出典：Arena Breakout: Infinite Wiki（Fandom）武器統計チャート／2026年10月時点で確認。<br>
+    数値は各武器の性能評価値（反動・エルゴノミクス・精度・実効射程などは評価スケール、初速は m/s、発射速度は rpm、重量は kg）。<br>
+    カテゴリ分類・表記は公開Wikiの記載に準拠しています。アサルトライフルは発射速度 700 RPM を境に2グループへ分割
+    （T192・FAMAS は武器個別ページで数値を確認）。サブマシンガンは
+    <span style="color:var(--bone)">High tier</span>（MPX・Vector 45・Vector 9・Banshee・P90・PP19）と
+    <span style="color:var(--bone)">Low tier</span> に分割しています。ゲームのアップデートで追加された武器は
+    <span style="color:var(--bone)">index.html 内の WEAPONS 配列</span>に追記してください。
+  </footer>
+</div>
+
+<script>
+/* ==========================================================================
+   アーマリー・ロール  /  Arena Breakout: Infinite 武器ランダム選出
+   --------------------------------------------------------------------------
+   ■ 武器を追加するには、下の WEAPONS 配列に 1 行足すだけです:
+   
+     { c:'AR', n:'NEW-GUN', cal:'5.56x45mm', s:[50,47,44,50,38,71,54,900,750,4.5] },
+   
+     c   = カテゴリコード（CATS のキー: AR / SMG / CARBINE / DMR / BOLT / SG / LMG / PISTOL）
+     n   = 武器名（半角英数字推奨）
+     cal = 口径
+     s   = 統計値の配列。並び順は下の STATS と同じ：
+           [縦反動, 横反動, エルゴノミクス, 安定性, 精度, 腰撃ち安定性,
+            実効射程, 初速(m/s), 発射速度(rpm), 重量(kg)]
+   
+   ■ 統計値が分からない武器は s:null にすると「統計未登録」として扱われます:
+     { c:'AR', n:'T192', cal:'—', s:null },
+   ========================================================================== */
+
+const CATS = {
+  AR_HI:   { ja:'アサルトライフル', en:'Assault Rifle · High RoF', code:'AR-H', sub:'発射速度 700 RPM 以上' },
+  AR_LO:   { ja:'アサルトライフル', en:'Assault Rifle · Low RoF',  code:'AR-L', sub:'発射速度 700 RPM 未満' },
+  SMG_HI:  { ja:'サブマシンガン', en:'Submachine Gun · High Tier', code:'SMG-H', sub:'High tier' },
+  SMG_LO:  { ja:'サブマシンガン', en:'Submachine Gun · Low Tier',  code:'SMG-L', sub:'Low tier'  },
+  CARBINE: { ja:'カービン',         en:'Carbine',           code:'CRB' },
+  DMR:     { ja:'マークスマンライフル', en:'Marksman Rifle', code:'DMR' },
+  BOLT:    { ja:'ボルトアクション', en:'Bolt-Action Rifle', code:'BLT' },
+  SG:      { ja:'ショットガン',     en:'Shotgun',           code:'SG'  },
+  LMG:     { ja:'軽機関銃',         en:'Light Machine Gun', code:'LMG' },
+  PISTOL:  { ja:'ピストル',         en:'Pistol',            code:'PST' }
+};
+
+/* 統計値の並び: [縦反動, 横反動, エルゴ, 安定性, 精度, 腰撃ち, 実効射程, 初速, 発射速度, 重量] */
+const WEAPONS = [
+  /* ---- Assault Rifles：発射速度 700 RPM 以上 ---- */
+  { c:'AR_HI', n:'M4A1',   cal:'5.56x45mm', s:[71,55,57,50,41,72,49,900,750,5.57] },
+  { c:'AR_HI', n:'H416',   cal:'5.56x45mm', s:[72,51,73,48,39,74,32,910,860,4.42] },
+  { c:'AR_HI', n:'DT MDR', cal:'5.56x45mm', s:[75,25,66,58,42,74,51,960,700,5.43] },
+  { c:'AR_HI', n:'AUG',    cal:'5.56x45mm', s:[77,69,68,51,59,81,46,970,750,3.88] },
+  { c:'AR_HI', n:'F2000',  cal:'5.56x45mm', s:[80,74,67,51,39,83,48,900,850,5.46] },
+  { c:'AR_HI', n:'AR-57',  cal:'5.7x28mm',  s:[69,55,49,50,41,69,51,800,850,4.98] },
+  { c:'AR_HI', n:'AEK',    cal:'7.62x39mm', s:[57,38,63,48,42,70,59,800,800,4.17] },
+  { c:'AR_HI', n:'T03',    cal:'5.8x42mm',  s:[77,37,57,49,45,72,53,930,700,3.70] },
+  { c:'AR_HI', n:'AK12',   cal:'5.45x39mm', s:[69,50,60,47,43,79,55,880,730,3.89] },
+  { c:'AR_HI', n:'MCX',    cal:'5.56x45mm', s:[77,69,80,46,30,71,30,820,700,2.61] },
+  { c:'AR_HI', n:'T191',   cal:'5.8x42mm',  s:[64,42,73,70,80,79,53,930,750,3.60] },
+  { c:'AR_HI', n:'AMB-17', cal:'9x39mm',    s:[75,63,61,51,49,64,37,310,730,5.66] },
+  { c:'AR_HI', n:'CZ 807', cal:'7.62x39mm', s:[66,50,74,48,37,60,49,760,750,1.90] },
+  { c:'AR_HI', n:'T192',   cal:'5.8x42mm',  s:[66,42,84,76,60,80,41,900,750,2.50] },
+  { c:'AR_HI', n:'FAMAS',  cal:'5.56x45mm', s:[73,42,51,51,45,70,40,850,900,3.31] },
+
+  /* ---- Assault Rifles：発射速度 700 RPM 未満 ---- */
+  { c:'AR_LO', n:'AKM',     cal:'7.62x39mm', s:[50,47,44,50,38,71,54,715,600,3.56] },
+  { c:'AR_LO', n:'FAL',     cal:'7.62x51mm', s:[52,43,43,48,42,57,51,820,630,6.93] },
+  { c:'AR_LO', n:'AK-102',  cal:'5.56x45mm', s:[67,50,50,50,38,77,50,850,600,4.90] },
+  { c:'AR_LO', n:'AK-74N',  cal:'5.45x39mm', s:[60,47,48,52,39,71,42,900,550,4.48] },
+  { c:'AR_LO', n:'AKS-74U', cal:'5.45x39mm', s:[52,36,44,50,29,72,33,735,500,4.93] },
+  { c:'AR_LO', n:'ACE31',   cal:'7.62x39mm', s:[54,32,59,48,48,74,58,800,650,4.37] },
+  { c:'AR_LO', n:'AN-94',   cal:'5.45x39mm', s:[54,35,62,48,75,75,57,900,630,4.40] },
+  { c:'AR_LO', n:'SCAR-L',  cal:'5.56x45mm', s:[66,44,70,52,50,73,46,875,500,5.33] },
+  { c:'AR_LO', n:'T951',    cal:'5.8x42mm',  s:[70,40,57,51,42,68,45,930,650,5.06] },
+  { c:'AR_LO', n:'SG550',   cal:'5.56x45mm', s:[49,27,46,50,32,61,41,760,525,4.06] },
+  { c:'AR_LO', n:'G3',      cal:'7.62x51mm', s:[54,29,53,47,38,65,39,790,460,5.32] },
+  { c:'AR_LO', n:'PCC-9',   cal:'9x19mm',    s:[70,51,78,55,28,73,36,396,600,2.46] },
+
+  /* ---- Submachine Guns：High tier ---- */
+  { c:'SMG_HI', n:'MPX',       cal:'9x19mm',    s:[68,48,81,45,25,74,33,390,850,3.77] },
+  { c:'SMG_HI', n:'Vector 45', cal:'.45',       s:[62,47,71,41,21,79,25,270,1100,3.28] },
+  { c:'SMG_HI', n:'Vector 9',  cal:'9x19mm',    s:[58,40,74,41,20,77,25,300,950,3.47] },
+  { c:'SMG_HI', n:'Banshee',   cal:'5.7x28mm',  s:null },
+  { c:'SMG_HI', n:'P90',       cal:'5.7x28mm',  s:[73,69,72,43,20,73,36,715,1000,3.73] },
+  { c:'SMG_HI', n:'PP19',      cal:'9x19mm',    s:[68,58,79,41,38,60,26,380,750,3.72] },
+
+  /* ---- Submachine Guns：Low tier ---- */
+  { c:'SMG_LO', n:'MP5',    cal:'9x19mm',    s:[70,50,74,42,22,76,28,400,750,3.89] },
+  { c:'SMG_LO', n:'UZI',    cal:'9x19mm',    s:[64,43,68,40,18,65,29,400,700,3.10] },
+  { c:'SMG_LO', n:'UMP45',  cal:'.45',       s:[65,47,66,43,20,63,34,285,600,2.05] },
+  { c:'SMG_LO', n:'MAC-10', cal:'.45',       s:[70,50,74,41,25,72,33,366,745,3.73] },
+  { c:'SMG_LO', n:'M3A1',   cal:'.45',       s:[68,50,60,40,19,60,34,274,450,3.02] },
+  { c:'SMG_LO', n:'T79',    cal:'7.62x25mm', s:[65,48,67,43,17,64,33,515,750,3.41] },
+  { c:'SMG_LO', n:'MP40',   cal:'9x19mm',    s:[68,42,65,40,17,61,28,400,500,4.55] },
+  { c:'SMG_LO', n:'QC61',   cal:'7.62x25mm', s:[61,41,69,42,19,62,33,490,700,3.72] },
+  { c:'SMG_LO', n:'MPF45',  cal:'.45',       s:[56,37,71,42,15,76,26,235,700,2.44] },
+  { c:'SMG_LO', n:'T85',    cal:'7.62x25mm', s:[75,74,70,42,23,71,39,500,780,3.05] },
+  { c:'SMG_LO', n:'MP9',    cal:'9x19mm',    s:[69,42,69,44,13,72,11,400,750,2.19] },
+
+  /* ---- Carbines ---- */
+  { c:'CARBINE', n:'SA85M',  cal:'7.62x39mm', s:[51,46,42,60,62,70,54,716,300,4.60] },
+  { c:'CARBINE', n:'SKS',    cal:'7.62x39mm', s:[42,39,46,65,77,50,58,735,300,5.02] },
+  { c:'CARBINE', n:'M14',    cal:'7.62x51mm', s:[44,39,45,63,76,61,66,853,350,5.34] },
+  { c:'CARBINE', n:'M96',    cal:'5.56x45mm', s:[59,35,50,60,55,60,57,960,400,3.63] },
+  { c:'CARBINE', n:'Mini14', cal:'5.56x45mm', s:[72,52,60,67,70,55,67,990,400,4.22] },
+  { c:'CARBINE', n:'BM59',   cal:'7.62x51mm', s:[34,25,48,55,60,46,62,823,300,3.43] },
+  { c:'CARBINE', n:'SVTU',   cal:'7.62x54mm', s:[30,25,30,50,35,42,66,640,200,3.97] },
+  { c:'CARBINE', n:'M16',    cal:'5.56x45mm', s:[64,39,53,48,43,72,73,875,660,5.04] },
+
+  /* ---- Marksman Rifles ---- */
+  { c:'DMR', n:'SVDS',            cal:'7.62x54mm', s:[43,44,44,64,91,22,83,815,225,7.36] },
+  { c:'DMR', n:'VSS',             cal:'9x39mm',    s:[65,45,57,55,44,71,26,287,850,6.22] },
+  { c:'DMR', n:'MK14',            cal:'7.62x51mm', s:[57,54,59,54,69,48,55,853,700,8.14] },
+  { c:'DMR', n:'M110',            cal:'7.62x51mm', s:[58,51,58,66,91,48,80,783,300,6.97] },
+  { c:'DMR', n:'U191',            cal:'5.8x42mm',  s:[63,49,54,72,90,51,64,950,750,3.67] },
+  { c:'DMR', n:'ML Lever-Action', cal:'.44',       s:[37,29,62,65,86,85,64,457,75,6.97] },
+
+  /* ---- Bolt-Action Rifles ---- */
+  { c:'BOLT', n:'Mosin-Nagant', cal:'7.62x54mm', s:[9,12,22,64,87,10,100,830,28,5.01] },
+  { c:'BOLT', n:'SJ16',         cal:'.338',      s:[11,15,32,65,90,10,125,1000,26,6.48] },
+  { c:'BOLT', n:'M24',          cal:'7.62x51mm', s:[7,12,51,68,90,10,120,853,30,4.40] },
+
+  /* ---- Shotguns ---- */
+  { c:'SG', n:'M870',   cal:'12x70mm', s:[14,15,44,43,9,50,12,403,70,4.32] },
+  { c:'SG', n:'MP-133', cal:'12x70mm', s:[7,6,47,41,5,51,11,337,60,4.25] },
+  { c:'SG', n:'S12K',   cal:'12x70mm', s:[30,32,66,41,10,51,14,396,200,4.85] },
+  { c:'SG', n:'USAS12', cal:'12x70mm', s:[37,42,53,40,12,50,12,400,275,3.37] },
+  { c:'SG', n:'SPR310', cal:'12x70mm', s:[25,24,49,38,10,50,10,410,300,3.08] },
+
+  /* ---- Light Machine Guns ---- */
+  { c:'LMG', n:'RPK16', cal:'5.45x39mm', s:[73,58,51,55,57,66,53,890,750,6.63] },
+
+  /* ---- Pistols ---- */
+  { c:'PISTOL', n:'G17',                cal:'9x19mm',    s:[56,23,73,51,15,65,14,375,400,1.16] },
+  { c:'PISTOL', n:'M9A3',               cal:'9x19mm',    s:[46,27,81,50,14,61,17,372,600,1.19] },
+  { c:'PISTOL', n:'G18C',               cal:'9x19mm',    s:[57,24,73,43,16,65,12,375,1000,1.31] },
+  { c:'PISTOL', n:'Desert Eagle',       cal:'.44',       s:[40,24,65,46,30,58,31,470,300,1.81] },
+  { c:'PISTOL', n:'Gold Desert Eagle',  cal:'.44',       s:[66,35,88,46,30,58,31,470,300,1.87] },
+  { c:'PISTOL', n:'T54',                cal:'7.62x25mm', s:[52,23,71,50,15,64,12,420,325,1.60] },
+  { c:'PISTOL', n:'M1911',              cal:'.45',       s:[54,26,77,51,14,63,16,251,350,2.50] },
+  { c:'PISTOL', n:'T05',                cal:'9x19mm',    s:[41,22,77,50,11,58,14,300,300,1.62] },
+  { c:'PISTOL', n:'M45A1',              cal:'.45',       s:[58,28,84,50,15,76,12,310,250,2.25] },
+  { c:'PISTOL', n:'CZ52',               cal:'7.62x25mm', s:[55,26,77,48,13,61,16,500,325,1.90] },
+  { c:'PISTOL', n:'F57',                cal:'5.7x28mm',  s:[60,25,83,53,22,62,20,650,400,2.49] },
+
+  /* ---- 統計未登録（公開Wikiの記載はあるが数値が確認できていない武器） ---- */
+  { c:'DMR', n:'T88', cal:'—', s:null }
+];
+
+const STATS = [
+  { ja:'縦反動',         en:'V.Recoil',    bar:true  },
+  { ja:'横反動',         en:'H.Recoil',    bar:true  },
+  { ja:'エルゴノミクス', en:'Ergonomics',  bar:true  },
+  { ja:'武器安定性',     en:'Stability',   bar:true  },
+  { ja:'精度',           en:'Accuracy',    bar:true  },
+  { ja:'腰撃ち安定性',   en:'Hip Fire',    bar:true  },
+  { ja:'実効射程',       en:'Eff. Range',  bar:true  },
+  { ja:'初速',           en:'Velocity',    bar:false, unit:'m/s' },
+  { ja:'発射速度',       en:'Rate of Fire',bar:false, unit:'rpm' },
+  { ja:'重量',           en:'Weight',      bar:false, unit:'kg'  }
+];
+
+/* ============================ state ============================ */
+const DEFAULT_OFF = ['PISTOL'];          // 初期状態で外しておくカテゴリ
+const active = new Set(Object.keys(CATS).filter(k => !DEFAULT_OFF.includes(k)));
+let last = null;                          // 直前の抽選結果（連続回避用）
+let lastSide = null;                      // 直前のサイドアーム（連続回避用）
+let noRepeat = true;
+const history = [];
+
+/* ============================ elements ============================ */
+const $ = id => document.getElementById(id);
+const reelEl = $('reel'), nameEl = $('resName'), tagEl = $('resTag'),
+      metaEl = $('resMeta'), stampEl = $('stamp'), rollBtn = $('rollBtn'),
+      catsEl = $('cats'), statsEl = $('stats'), statNameEl = $('statName'),
+      histEl = $('hist'), winCount = $('winCount'), poolCount = $('poolCount'),
+      histCount = $('histCount'), catNote = $('catNote'),
+      saPanel = $('sidearmPanel'), saName = $('saName'), saMeta = $('saMeta'), saPills = $('saPills');
+
+/* 統計バーのスケール：各項目ごとの最大値で正規化 */
+const STAT_MAX = [];
+WEAPONS.forEach(w => { if (w.s) w.s.forEach((v, i) => { STAT_MAX[i] = Math.max(STAT_MAX[i] || 0, v); }); });
+
+/* サイドアーム自動選出用：ピストル全丁（カテゴリ選択に関係なくここから抽選） */
+const PISTOLS = WEAPONS.filter(w => w.c === 'PISTOL');
+
+/* サイドアームの表示項目：統計配列のインデックス */
+const SIDE_KEYS = [
+  { i:0, ja:'縦反動' }, { i:2, ja:'エルゴ' }, { i:4, ja:'精度' },
+  { i:6, ja:'実効射程' }, { i:8, ja:'発射速度', unit:'rpm' }, { i:9, ja:'重量', unit:'kg' }
+];
+
+/* ============================ category chips ============================ */
+Object.keys(CATS).forEach(key => {
+  const cat = CATS[key];
+  const n = WEAPONS.filter(w => w.c === key).length;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'chip';
+  btn.dataset.cat = key;
+  btn.setAttribute('aria-pressed', String(active.has(key)));
+  btn.innerHTML = '<span class="code">' + cat.code + '</span>' +
+                  '<span class="ctxt"><span class="cname">' + cat.ja + '</span>' +
+                  (cat.sub ? '<span class="csub">' + cat.sub + '</span>' : '') + '</span>' +
+                  '<span class="ct">' + n + '</span>';
+  btn.addEventListener('click', () => {
+    if (active.has(key)) { if (active.size > 1) active.delete(key); }
+    else active.add(key);
+    btn.setAttribute('aria-pressed', String(active.has(key)));
+    refreshCounts();
+  });
+  catsEl.appendChild(btn);
+});
+
+$('allBtn').addEventListener('click', () => setAll(true));
+$('noneBtn').addEventListener('click', () => setAll(false));
+
+function setAll(state) {
+  if (!state) {                       // 全解除 → 1つだけ残す（空プール防止）
+    const keep = Object.keys(CATS)[0];
+    active.clear(); active.add(keep);
+  } else {
+    Object.keys(CATS).forEach(k => active.add(k));
+  }
+  document.querySelectorAll('.chip').forEach(c => {
+    c.setAttribute('aria-pressed', String(active.has(c.dataset.cat)));
+  });
+  refreshCounts();
+}
+
+function pool() { return WEAPONS.filter(w => active.has(w.c)); }
+
+function refreshCounts() {
+  const n = pool().length;
+  winCount.textContent = '対象 ' + n + ' 丁';
+  poolCount.textContent = n;
+  const p = [].concat([...active]);
+  catNote.textContent = (active.has('PISTOL')
+    ? 'ピストルも抽選対象に含まれています。'
+    : 'ピストル（サイドアーム）は初期設定で外しています。') +
+    'アサルトライフルは発射速度 700 RPM 以上／未満、サブマシンガンは High tier／Low tier に分割しています。';
+}
+
+/* ============================ roll ============================ */
+let spinning = false;
+
+function pickTarget() {
+  let p = pool();
+  if (noRepeat && last && p.length > 1) {
+    const filtered = p.filter(w => w.n !== last.n);
+    if (filtered.length) p = filtered;
+  }
+  return p[Math.floor(Math.random() * p.length)];
+}
+
+function roll() {
+  if (spinning) return;
+  if (!pool().length) { showEmpty(); return; }
+  const target = pickTarget();
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (reduced) { settle(target); return; }
+
+  spinning = true;
+  rollBtn.disabled = true;
+  rollBtn.innerHTML = 'SCANNING <small>…</small>';
+  reelEl.classList.add('rolling');
+  nameEl.classList.add('spin');
+  tagEl.dataset.empty = '1';
+  tagEl.textContent = 'Scanning';
+  metaEl.innerHTML = '<span>対象プールから抽出中…</span>';
+  stampEl.classList.remove('on');
+
+  const p = pool();
+  let delay = 40;
+
+  (function step() {
+    nameEl.textContent = p[Math.floor(Math.random() * p.length)].n;
+    delay *= 1.135;
+    if (delay < 205) {
+      setTimeout(step, delay);
+    } else {
+      setTimeout(() => settle(target), 190);
+    }
+  })();
+}
+
+function settle(w) {
+  spinning = false;
+  rollBtn.disabled = false;
+  rollBtn.innerHTML = '再 抽 選 <small>SPACE</small>';
+  reelEl.classList.remove('rolling');
+  nameEl.classList.remove('spin');
+  nameEl.textContent = w.n;
+  last = w;
+
+  const cat = CATS[w.c];
+  tagEl.dataset.empty = '0';
+  tagEl.textContent = cat.code + ' / ' + cat.en;
+
+  metaEl.innerHTML = '<span>' + cat.ja + '</span><span class="sep">◆</span>' +
+                     '<span>' + w.cal + '</span>' +
+                     (w.s ? '' : '<span class="sep">◆</span><span class="note">統計未登録</span>');
+
+  renderStats(w);
+
+  /* ボルトアクションのときだけ、ピストルを1丁サイドアームとして同時選出 */
+  const side = (w.c === 'BOLT') ? pickSidearm() : null;
+  if (side) { showSidearm(side); metaEl.innerHTML += '<span class="sep">◆</span>' +
+              '<span class="note">＋ ' + side.n + '</span>'; }
+  else { hideSidearm(); }
+
+  stampEl.classList.remove('on');
+  void stampEl.offsetWidth;                 // reflow でアニメーションを再生
+  stampEl.classList.add('on');
+  reelEl.classList.remove('shake');
+  void reelEl.offsetWidth;
+  reelEl.classList.add('shake');
+
+  history.unshift({ n: w.n, code: cat.code, side: side ? side.n : null });
+  if (history.length > 20) history.pop();
+  renderHistory();
+}
+
+/* ============================ sidearm ============================ */
+function pickSidearm() {
+  let p = PISTOLS;
+  if (noRepeat && lastSide && p.length > 1) {
+    const f = p.filter(w => w.n !== lastSide.n);
+    if (f.length) p = f;
+  }
+  return p[Math.floor(Math.random() * p.length)];
+}
+
+function showSidearm(w) {
+  lastSide = w;
+  saName.textContent = w.n;
+  saMeta.textContent = 'Pistol ／ ' + w.cal + (w.s ? '' : ' ／ 統計未登録');
+  saPills.innerHTML = w.s
+    ? SIDE_KEYS.map(k => {
+        const v = w.s[k.i];
+        const val = k.unit === 'kg' ? v.toFixed(2) : String(v);
+        return '<div class="sa-pill"><span>' + k.ja + '</span><b>' + val +
+               (k.unit ? '<u>' + k.unit + '</u>' : '') + '</b></div>';
+      }).join('')
+    : '<p class="sa-pill" style="grid-column:1/-1">統計データは未確認です</p>';
+  saPanel.hidden = false;
+  saPanel.classList.remove('reveal');
+  void saPanel.offsetWidth;
+  saPanel.classList.add('reveal');
+}
+
+function hideSidearm() {
+  saPanel.hidden = true;
+  saPanel.classList.remove('reveal');
+}
+
+function showEmpty() {
+  reelEl.classList.remove('rolling');
+  nameEl.textContent = '— なし —';
+  tagEl.dataset.empty = '1';
+  tagEl.textContent = 'Empty Pool';
+  metaEl.innerHTML = '<span>カテゴリを1つ以上選択してください</span>';
+}
+
+/* ============================ stats ============================ */
+function renderStats(w) {
+  statNameEl.textContent = w.n;
+  if (!w.s) {
+    statsEl.innerHTML = '<p class="empty-note">この武器の統計データは公開Wikiで未確認のため、登録されていません。' +
+                        '数値が分かったら <code>WEAPONS</code> 配列の <code>s</code> を埋めてください。</p>';
+    return;
+  }
+  statsEl.innerHTML = STATS.map((st, i) => {
+    const v = w.s[i];
+    const val = st.unit === 'kg' ? v.toFixed(2) : String(v);
+    let bar = '';
+    if (st.bar) {
+      const pct = Math.max(2, Math.round((v / (STAT_MAX[i] || 1)) * 100));
+      bar = '<span class="bar"><i style="width:' + pct + '%"></i></span>';
+    }
+    return '<div class="srow"><span class="n">' + st.ja + '<em>' + st.en + '</em></span>' +
+           '<span class="v">' + val + (st.unit ? '<u>' + st.unit + '</u>' : '') + '</span>' + bar + '</div>';
+  }).join('');
+}
+
+/* ============================ history ============================ */
+function renderHistory() {
+  histCount.textContent = history.length;
+  if (!history.length) {
+    histEl.innerHTML = '<p style="margin:0;font-size:12px;color:var(--steel)">まだ履歴はありません。</p>';
+    return;
+  }
+  histEl.innerHTML = history.map((h, i) =>
+    '<div class="hitem"><span class="idx">' + String(i + 1).padStart(2, '0') + '</span>' +
+    '<b>' + h.n + '</b>' + (h.side ? '<span class="side">＋ ' + h.side + '</span>' : '') +
+    '<span class="c">' + h.code + '</span></div>').join('');
+}
+
+$('clearHist').addEventListener('click', () => { history.length = 0; renderHistory(); });
+
+/* ============================ wiring ============================ */
+rollBtn.addEventListener('click', roll);
+
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' && e.code !== 'Enter') return;
+  const a = document.activeElement;
+  if (a && a.matches && a.matches('.chip, .mini')) return;   // チップ類の操作を邪魔しない
+  e.preventDefault();
+  roll();
+});
+
+/* 連続同一回避トグル（カテゴリパネルに追加） */
+(function addNoRepeatToggle() {
+  const note = document.getElementById('catNote');
+  const wrap = document.createElement('button');
+  wrap.type = 'button';
+  wrap.className = 'chip';
+  wrap.setAttribute('aria-pressed', 'true');
+  wrap.innerHTML = '<span class="code">RPT</span><span>連続で同じ武器を出さない</span>';
+  wrap.addEventListener('click', () => {
+    noRepeat = !noRepeat;
+    wrap.setAttribute('aria-pressed', String(noRepeat));
+  });
+  wrap.style.margin = '0 12px 10px';
+  wrap.style.width = 'calc(100% - 24px)';
+  note.parentNode.insertBefore(wrap, note);
+})();
+
+refreshCounts();
+renderHistory();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
